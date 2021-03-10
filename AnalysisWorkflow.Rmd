@@ -143,7 +143,18 @@ Or even simpler
 sapply(books, anyNA)
 ```
 
-We can see that there are some missing values in the second column, `review`. Let's filter these out.
+We can see that there are some missing values in the second column, `review`. Let's filter these out. But first, let's examine it a bit closer. Perhaps these missing values are all for the same book, or perhaps the same state.
+
+```{r}
+books_na <- books %>% filter(is.na(review))
+
+count(books_na, book, sort = TRUE)
+count(books_na, state, sort = TRUE)
+```
+
+We can see that the most affected book is `R for Dummies`, and the most affected 2 states are `Texas` and `California` We might want to analyse this further. This kind of information could prove useful for the company.
+
+For now, let's just remove this data.
 
 ```{r}
 # This filters the dataframe by all reviews that are not of NA value
@@ -196,6 +207,15 @@ head(books_new)
 unique(books_new$states)
 ```
 
+
+A side note, let's check to see if there's any relationship between states and the books sold.
+
+```{r}
+# Produce a cross classification table
+cct <- table(books_new$book, books_new$states)
+cct
+```
+
 ### Transforming the Review Data
 
 Let's change the `review` column. We'll want to change these ratings to numerical data. We'll follow a similar process as the last exercise. We'll keep the original `review ` column.
@@ -220,6 +240,10 @@ books_new <- books_new %>%
               mutate(is_high_review = if_else(review_num >= 4, TRUE, FALSE))
 
 head(books_new)
+```
+
+```{r}
+table(books_new$book, books_new$is_high_review)
 ```
 
 ### Analyzing the Data
@@ -284,7 +308,7 @@ We might say that this is the most profitable book. If we look back at frequency
 
 However, with price, there is quite a spread. `Secrets Of R For Advanced Students` made over 3000 more than `Fundamentals of R For Beginners` despite only selling a handful of copies less.
 
-### Conclusion
+### Discussion
 
 #### Introduction
 
@@ -312,7 +336,7 @@ Results revealed that:
 1. `Secrets Of R For Advanced Students` had made more money than any other book, by a reasonably large margin. 
 1. `Fundamentals of R For Beginners` had sold more books than any other book, by a reasonably small margin.
 
-### Conclusion
+#### Conclusion
 
 The answer to our question was that both `Fundamentals of R For Beginners` and `Secrets Of R For Advanced Students` were both profitable. However, given that there were only small differences in the amount of books sold by category, and quite a large difference between the book which sold the most, compared to the rest, I believe `Secrets Of R For Advanced Students` is the most profitable book.
 

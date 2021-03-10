@@ -359,16 +359,6 @@ pre code {
 <div id="data-analysis-workflow" class="section level2">
 <h2>Data Analysis Workflow</h2>
 <p>This is just a little bit on the general workflow you could follow when analysing data in R</p>
-<pre class="r"><code># Import libraries
-library(tidyverse)</code></pre>
-<pre><code>## ── Attaching packages ─────────────────────────────────────── tidyverse 1.3.0 ──</code></pre>
-<pre><code>## ✓ ggplot2 3.3.3     ✓ purrr   0.3.4
-## ✓ tibble  3.1.0     ✓ dplyr   1.0.4
-## ✓ tidyr   1.1.2     ✓ stringr 1.4.0
-## ✓ readr   1.4.0     ✓ forcats 0.5.1</code></pre>
-<pre><code>## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
-## x dplyr::filter() masks stats::filter()
-## x dplyr::lag()    masks stats::lag()</code></pre>
 <pre class="r"><code># Import Data
 books &lt;- read_csv(&quot;book_reviews.csv&quot;, col_types = cols())</code></pre>
 <div id="getting-familiar-with-the-data" class="section level3">
@@ -428,10 +418,320 @@ head(books)</code></pre>
 <p>In this dataset, here’s what the columns represent:</p>
 <ul>
 <li><code>book</code> - Name of books</li>
-<li><code>review</code> - What review the book has</li>
-<li><code>state</code> - This may represetn where the book was published</li>
+<li><code>review</code> - What review the book has. We can see some NA values here.</li>
+<li><code>state</code> - This may represetn where the book was published. These names are a bit inconsistent.</li>
 <li><code>price</code> - The price of the books</li>
 </ul>
+<p>If we wanted to know the data type of these columns, we could look at the <code>glimpse</code> output. Alternatively, we could do something like this</p>
+<pre class="r"><code>for (col in colnames(books)) {
+  type &lt;- typeof(books[[col]])
+  print(paste(col, &quot;:&quot;, type))
+}</code></pre>
+<pre><code>## [1] &quot;book : character&quot;
+## [1] &quot;review : character&quot;
+## [1] &quot;state : character&quot;
+## [1] &quot;price : double&quot;</code></pre>
+<p>We can see that 3 of the columns are of type <code>character</code>. One is of type <code>double</code></p>
+<p>Let’s get a better idea of the data using <code>summary</code> and <code>unique</code>. We’ll also take a look at a couple of other functions.</p>
+<pre class="r"><code>summary(books)</code></pre>
+<pre><code>##      book              review             state               price      
+##  Length:2000        Length:2000        Length:2000        Min.   :15.99  
+##  Class :character   Class :character   Class :character   1st Qu.:19.99  
+##  Mode  :character   Mode  :character   Mode  :character   Median :29.99  
+##                                                           Mean   :31.29  
+##                                                           3rd Qu.:39.99  
+##                                                           Max.   :50.00</code></pre>
+<p>This is useful for getting some quick stats on the dataset. It’s useful mainly for numerical data. As you can see it’s given us the <code>mean</code>, <code>min</code>, along with a few other metrics.</p>
+<p>We can also get the <code>min</code> and <code>max</code> from the numerical column doing this.</p>
+<pre class="r"><code>sapply(books[,4], range)</code></pre>
+<pre><code>##      price
+## [1,] 15.99
+## [2,] 50.00</code></pre>
+<p>Let’s look at the unique values for each column.</p>
+<pre class="r"><code>for (col in colnames(books)) {
+  print(unique(books[[col]]))
+}</code></pre>
+<pre><code>## [1] &quot;R Made Easy&quot;                        &quot;R For Dummies&quot;                     
+## [3] &quot;Secrets Of R For Advanced Students&quot; &quot;Top 10 Mistakes R Beginners Make&quot;  
+## [5] &quot;Fundamentals of R For Beginners&quot;   
+## [1] &quot;Excellent&quot; &quot;Fair&quot;      &quot;Poor&quot;      &quot;Great&quot;     NA          &quot;Good&quot;     
+## [1] &quot;TX&quot;         &quot;NY&quot;         &quot;FL&quot;         &quot;Texas&quot;      &quot;California&quot;
+## [6] &quot;Florida&quot;    &quot;CA&quot;         &quot;New York&quot;  
+## [1] 19.99 15.99 50.00 29.99 39.99</code></pre>
+<p>We’re now more familiar with the data. Let’s see if we can remove missing values.</p>
+</div>
+<div id="handling-missing-data" class="section level3">
+<h3>Handling Missing Data</h3>
+<p>There are really 4 things we can do with missing data:</p>
+<ol style="list-style-type: decimal">
+<li>Ignore it</li>
+<li>Remove rows with missing data</li>
+<li>Remove columns with missing data</li>
+<li>Fill in the missing values with something</li>
+</ol>
+<p>We’ll only look at 2 and 3 for now.</p>
+<pre class="r"><code># Check which columns have missing data
+for (col in colnames(books)) {
+  bool &lt;- is.na(books[[col]])
+  if (TRUE %in% bool) {
+    print(&quot;Missing&quot;)
+  } else {
+    print(&quot;Fine&quot;)
+
+  }
+}</code></pre>
+<pre><code>## [1] &quot;Fine&quot;
+## [1] &quot;Missing&quot;
+## [1] &quot;Fine&quot;
+## [1] &quot;Fine&quot;</code></pre>
+<p>The above is a little inefficient. A better way of finding out which cols are missing values, we can do this</p>
+<pre class="r"><code>colSums(is.na(books)) &gt; 0</code></pre>
+<pre><code>##   book review  state  price 
+##  FALSE   TRUE  FALSE  FALSE</code></pre>
+<p>Or even simpler</p>
+<pre class="r"><code>sapply(books, anyNA)</code></pre>
+<pre><code>##   book review  state  price 
+##  FALSE   TRUE  FALSE  FALSE</code></pre>
+<p>We can see that there are some missing values in the second column, <code>review</code>. Let’s filter these out. But first, let’s examine it a bit closer. Perhaps these missing values are all for the same book, or perhaps the same state.</p>
+<pre class="r"><code>books_na &lt;- books %&gt;% filter(is.na(review))
+
+count(books_na, book, sort = TRUE)</code></pre>
+<pre><code>## # A tibble: 5 x 2
+##   book                                   n
+##   &lt;chr&gt;                              &lt;int&gt;
+## 1 R For Dummies                         49
+## 2 Secrets Of R For Advanced Students    46
+## 3 Fundamentals of R For Beginners       44
+## 4 R Made Easy                           37
+## 5 Top 10 Mistakes R Beginners Make      30</code></pre>
+<pre class="r"><code>count(books_na, state, sort = TRUE)</code></pre>
+<pre><code>## # A tibble: 8 x 2
+##   state          n
+##   &lt;chr&gt;      &lt;int&gt;
+## 1 Texas         33
+## 2 TX            29
+## 3 CA            28
+## 4 California    26
+## 5 NY            25
+## 6 FL            23
+## 7 New York      22
+## 8 Florida       20</code></pre>
+<p>We can see that the most affected book is <code>R for Dummies</code>, and the most affected 2 states are <code>Texas</code> and <code>California</code> We might want to analyse this further. This kind of information could prove useful for the company.</p>
+<p>For now, let’s just remove this data.</p>
+<pre class="r"><code># This filters the dataframe by all reviews that are not of NA value
+books_new &lt;- books %&gt;% filter(!is.na(review))
+nrow(books) - nrow(books_new)</code></pre>
+<pre><code>## [1] 206</code></pre>
+<p>You can see that we’ve removed <code>206</code> rows. We should always be aware of how much data we’ve removed, why that data had missing values in the first instance, and whether this is likely to impact on any potential analysis.</p>
+</div>
+<div id="dealting-with-inconsistent-labels" class="section level3">
+<h3>Dealting with Inconsistent Labels</h3>
+<p>Let’s take a closer look at our data using <code>head</code></p>
+<pre class="r"><code>head(books_new, 10)</code></pre>
+<pre><code>## # A tibble: 10 x 4
+##    book                               review    state   price
+##    &lt;chr&gt;                              &lt;chr&gt;     &lt;chr&gt;   &lt;dbl&gt;
+##  1 R Made Easy                        Excellent TX       20.0
+##  2 R For Dummies                      Fair      NY       16.0
+##  3 R Made Easy                        Excellent NY       20.0
+##  4 R Made Easy                        Poor      FL       20.0
+##  5 Secrets Of R For Advanced Students Great     Texas    50  
+##  6 R Made Easy                        Great     Florida  20.0
+##  7 R Made Easy                        Poor      CA       20.0
+##  8 Top 10 Mistakes R Beginners Make   Fair      CA       30.0
+##  9 Secrets Of R For Advanced Students Fair      Texas    50  
+## 10 R Made Easy                        Great     NY       20.0</code></pre>
+<p>It looks as those that <code>state</code> values may be a bit inconsistent. We can see <code>Texas</code> and <code>TX</code></p>
+<pre class="r"><code>unique(books_new$state)</code></pre>
+<pre><code>## [1] &quot;TX&quot;         &quot;NY&quot;         &quot;FL&quot;         &quot;Texas&quot;      &quot;Florida&quot;   
+## [6] &quot;CA&quot;         &quot;California&quot; &quot;New York&quot;</code></pre>
+<p>Let’s stick to using the full name, rather than the postal code. Once complete, our values should look like this:</p>
+<p><em>. Texas </em>. New York <em>. Florida </em>. California</p>
+<p>In a real life analysis situation, we might load in a dataset of full names and postal codes, and map them that way. In this case, because there are so few states, we’ll do it differently.</p>
+<p>Let’s use the <code>case_when</code> and <code>mutate</code> functions as practice. There are more efficient ways, but we’ll stick with this.</p>
+<pre class="r"><code>books_new &lt;- books_new %&gt;%
+              mutate(states = case_when(
+                state == &quot;TX&quot; ~ &quot;Texas&quot;,
+                state == &quot;NY&quot; ~ &quot;New York&quot;, 
+                state == &quot;FL&quot; ~ &quot;Florida&quot;, 
+                state == &quot;CA&quot; ~ &quot;California&quot;,
+                TRUE ~ state
+              )) %&gt;% select(-state)
+
+head(books_new)</code></pre>
+<pre><code>## # A tibble: 6 x 4
+##   book                               review    price states  
+##   &lt;chr&gt;                              &lt;chr&gt;     &lt;dbl&gt; &lt;chr&gt;   
+## 1 R Made Easy                        Excellent  20.0 Texas   
+## 2 R For Dummies                      Fair       16.0 New York
+## 3 R Made Easy                        Excellent  20.0 New York
+## 4 R Made Easy                        Poor       20.0 Florida 
+## 5 Secrets Of R For Advanced Students Great      50   Texas   
+## 6 R Made Easy                        Great      20.0 Florida</code></pre>
+<pre class="r"><code>unique(books_new$states)</code></pre>
+<pre><code>## [1] &quot;Texas&quot;      &quot;New York&quot;   &quot;Florida&quot;    &quot;California&quot;</code></pre>
+<p>A side note, let’s check to see if there’s any relationship between states and the books sold.</p>
+<pre class="r"><code># Produce a cross classification table
+cct &lt;- table(books_new$book, books_new$states)
+cct</code></pre>
+<pre><code>##                                     
+##                                      California Florida New York Texas
+##   Fundamentals of R For Beginners            99      74       97    96
+##   R For Dummies                             120      77       81    83
+##   R Made Easy                                84      85       96    87
+##   Secrets Of R For Advanced Students         84      86      108    82
+##   Top 10 Mistakes R Beginners Make           77      84      102    92</code></pre>
+</div>
+<div id="transforming-the-review-data" class="section level3">
+<h3>Transforming the Review Data</h3>
+<p>Let’s change the <code>review</code> column. We’ll want to change these ratings to numerical data. We’ll follow a similar process as the last exercise. We’ll keep the original <code>review</code> column.</p>
+<pre class="r"><code>books_new &lt;- books_new %&gt;%
+              mutate(review_num = case_when(
+                review == &quot;Poor&quot; ~ 1,
+                review == &quot;Fair&quot; ~ 2,
+                review == &quot;Good&quot; ~ 3,
+                review == &quot;Great&quot; ~ 4,
+                review == &quot;Excellent&quot; ~ 5
+              )) 
+
+head(books_new)</code></pre>
+<pre><code>## # A tibble: 6 x 5
+##   book                               review    price states   review_num
+##   &lt;chr&gt;                              &lt;chr&gt;     &lt;dbl&gt; &lt;chr&gt;         &lt;dbl&gt;
+## 1 R Made Easy                        Excellent  20.0 Texas             5
+## 2 R For Dummies                      Fair       16.0 New York          2
+## 3 R Made Easy                        Excellent  20.0 New York          5
+## 4 R Made Easy                        Poor       20.0 Florida           1
+## 5 Secrets Of R For Advanced Students Great      50   Texas             4
+## 6 R Made Easy                        Great      20.0 Florida           4</code></pre>
+<p>Let’s also create a column that lets us know whether a review is high or not. For the sake of this exercise, a review that is above <code>4</code> will be considered high.</p>
+<pre class="r"><code>books_new &lt;- books_new %&gt;% 
+              mutate(is_high_review = if_else(review_num &gt;= 4, TRUE, FALSE))
+
+head(books_new)</code></pre>
+<pre><code>## # A tibble: 6 x 6
+##   book                          review   price states  review_num is_high_review
+##   &lt;chr&gt;                         &lt;chr&gt;    &lt;dbl&gt; &lt;chr&gt;        &lt;dbl&gt; &lt;lgl&gt;         
+## 1 R Made Easy                   Excelle…  20.0 Texas            5 TRUE          
+## 2 R For Dummies                 Fair      16.0 New Yo…          2 FALSE         
+## 3 R Made Easy                   Excelle…  20.0 New Yo…          5 TRUE          
+## 4 R Made Easy                   Poor      20.0 Florida          1 FALSE         
+## 5 Secrets Of R For Advanced St… Great     50   Texas            4 TRUE          
+## 6 R Made Easy                   Great     20.0 Florida          4 TRUE</code></pre>
+<pre class="r"><code>table(books_new$book, books_new$is_high_review)</code></pre>
+<pre><code>##                                     
+##                                      FALSE TRUE
+##   Fundamentals of R For Beginners      215  151
+##   R For Dummies                        233  128
+##   R Made Easy                          213  139
+##   Secrets Of R For Advanced Students   225  135
+##   Top 10 Mistakes R Beginners Make     214  141</code></pre>
+</div>
+<div id="analyzing-the-data" class="section level3">
+<h3>Analyzing the Data</h3>
+<p>Now that we’ve done some basic data cleaning, let’s anaylze the data.</p>
+<p>Our goal is to assess which book is the most profitable. But how do we judge what’s most profitable?</p>
+<p>For this dataset we could:</p>
+<p><em>. Look at the frequency at which each book is purchased </em>. Look at how much money the book has generated overall</p>
+<p>I think both are important.</p>
+<pre class="r"><code># Assessing which books have sold the most
+count(books_new, book, sort = TRUE)</code></pre>
+<pre><code>## # A tibble: 5 x 2
+##   book                                   n
+##   &lt;chr&gt;                              &lt;int&gt;
+## 1 Fundamentals of R For Beginners      366
+## 2 R For Dummies                        361
+## 3 Secrets Of R For Advanced Students   360
+## 4 Top 10 Mistakes R Beginners Make     355
+## 5 R Made Easy                          352</code></pre>
+<p>We can see that <code>Fundamentals of R For Beginners</code> has sold the most.</p>
+<pre class="r"><code>books_new</code></pre>
+<pre><code>## # A tibble: 1,794 x 6
+##    book                       review    price states   review_num is_high_review
+##    &lt;chr&gt;                      &lt;chr&gt;     &lt;dbl&gt; &lt;chr&gt;         &lt;dbl&gt; &lt;lgl&gt;         
+##  1 R Made Easy                Excellent  20.0 Texas             5 TRUE          
+##  2 R For Dummies              Fair       16.0 New York          2 FALSE         
+##  3 R Made Easy                Excellent  20.0 New York          5 TRUE          
+##  4 R Made Easy                Poor       20.0 Florida           1 FALSE         
+##  5 Secrets Of R For Advanced… Great      50   Texas             4 TRUE          
+##  6 R Made Easy                Great      20.0 Florida           4 TRUE          
+##  7 R Made Easy                Poor       20.0 Califor…          1 FALSE         
+##  8 Top 10 Mistakes R Beginne… Fair       30.0 Califor…          2 FALSE         
+##  9 Secrets Of R For Advanced… Fair       50   Texas             2 FALSE         
+## 10 R Made Easy                Great      20.0 New York          4 TRUE          
+## # … with 1,784 more rows</code></pre>
+<p>Let’s check the price. We can do it this way</p>
+<pre class="r"><code>rowsum(books_new$price, books_new$book)</code></pre>
+<pre><code>##                                        [,1]
+## Fundamentals of R For Beginners    14636.34
+## R For Dummies                       5772.39
+## R Made Easy                         7036.48
+## Secrets Of R For Advanced Students 18000.00
+## Top 10 Mistakes R Beginners Make   10646.45</code></pre>
+<p>or maybe like this</p>
+<pre class="r"><code>books_new %&gt;% 
+  group_by(book) %&gt;% 
+    summarise(price = sum(price))</code></pre>
+<pre><code>## # A tibble: 5 x 2
+##   book                                price
+## * &lt;chr&gt;                               &lt;dbl&gt;
+## 1 Fundamentals of R For Beginners    14636.
+## 2 R For Dummies                       5772.
+## 3 R Made Easy                         7036.
+## 4 Secrets Of R For Advanced Students 18000 
+## 5 Top 10 Mistakes R Beginners Make   10646.</code></pre>
+<p>Let’s break this down. We can first create a gruoped variable, whereby we’ve essentially grouped by each category in the <code>book</code> column using <code>group_by</code></p>
+<pre class="r"><code>grouped &lt;- group_by(books_new, book)</code></pre>
+<p>We then pass this to the <code>summarise</code> function where we sum up the existing price column. By piping the grouped variable to this, it sums up values by group.</p>
+<pre class="r"><code>price_total &lt;- summarise(grouped, price = sum(price))</code></pre>
+<pre class="r"><code># Sort the data using order
+price_total[order(price_total$price, decreasing = TRUE),]</code></pre>
+<pre><code>## # A tibble: 5 x 2
+##   book                                price
+##   &lt;chr&gt;                               &lt;dbl&gt;
+## 1 Secrets Of R For Advanced Students 18000 
+## 2 Fundamentals of R For Beginners    14636.
+## 3 Top 10 Mistakes R Beginners Make   10646.
+## 4 R Made Easy                         7036.
+## 5 R For Dummies                       5772.</code></pre>
+<p>We can see that <code>Secrets Of R For Advanced Students</code> has made the most money.</p>
+<p>We might say that this is the most profitable book. If we look back at frequency sold, most books seemed to have sold similar amount (350-370).</p>
+<p>However, with price, there is quite a spread. <code>Secrets Of R For Advanced Students</code> made over 3000 more than <code>Fundamentals of R For Beginners</code> despite only selling a handful of copies less.</p>
+</div>
+<div id="discussion" class="section level3">
+<h3>Discussion</h3>
+<div id="introduction" class="section level4">
+<h4>Introduction</h4>
+<p>My motivation here was mainly to develop my basic R and Data Analysis skills, and set out a very basic outline of how to go about conducting analysis.</p>
+<p>The main aim of this report was to assess what the most profitable book was. There were two ways to assess this: <strong>what sold the most</strong>, and <strong>what made the most money.</strong>. I ultimately decided to look at both.</p>
+</div>
+<div id="findings" class="section level4">
+<h4>Findings</h4>
+<p>The data had some problems:</p>
+<ol style="list-style-type: decimal">
+<li>Missing data - I identified there was missing data in the <code>review</code> column and took steps to remove rows where this was the case.</li>
+<li>Inconsistent data - I identified that the <code>state</code> column had inconsistencies. I took steps to amend this data.</li>
+<li>Review data - data in the <code>review</code> column was of character type. I took steps to create a new column which converted these ratings to numeric.</li>
+</ol>
+<p>For our main question, we were only really interested in:</p>
+<ol style="list-style-type: decimal">
+<li>Seeing which books sold the most</li>
+<li>Seeing which books made the most money</li>
+</ol>
+<p>This involved using functions such as <code>groupby</code> and <code>count</code>.</p>
+<p>Results revealed that:</p>
+<ol style="list-style-type: decimal">
+<li><code>Secrets Of R For Advanced Students</code> had made more money than any other book, by a reasonably large margin.</li>
+<li><code>Fundamentals of R For Beginners</code> had sold more books than any other book, by a reasonably small margin.</li>
+</ol>
+</div>
+<div id="conclusion" class="section level4">
+<h4>Conclusion</h4>
+<p>The answer to our question was that both <code>Fundamentals of R For Beginners</code> and <code>Secrets Of R For Advanced Students</code> were both profitable. However, given that there were only small differences in the amount of books sold by category, and quite a large difference between the book which sold the most, compared to the rest, I believe <code>Secrets Of R For Advanced Students</code> is the most profitable book.</p>
+<p>There are of course many factors which limit this analysis. For one, we don’t know the profit margins. Although we can say one book made more than another book, we can’t say whether it generated more profit.</p>
+<p>This type of analysis can be taken many ways. A bookstore may use this information to adjust prices, promote less popular books, double down on promoting the most popular books, or displaying the most popular book in the window display.</p>
+<p><strong>THANKS FOR READING!!!!</strong></p>
+</div>
 </div>
 </div>
 
