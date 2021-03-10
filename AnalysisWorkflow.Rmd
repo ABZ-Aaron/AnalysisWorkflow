@@ -9,22 +9,325 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Data Analysis Workflow
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+This is just a little bit on the general workflow you could follow when analysing data in R
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r warning = FALSE, include = FALSE}
+# Import libraries
+library(tidyverse)
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+# Import Data
+books <- read_csv("book_reviews.csv", col_types = cols())
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+### Getting Familiar with the Data
+
+When we first get ahold of our data, we want to check various things. 
+
+1. How much data do we have?
+1. What kind of data do we have?
+1. Is there anything weird about the data?
+1. Is there missing data?
+1. Any misspellings?
+
+Let's get started
+
+```{r}
+# Glimpse gives us a nice look at the data. It lets us know how many columns and rows there are. It also shows us which columns exist, some of the data associated with these, along with the data type for each column.
+glimpse(books)
+```
+We can also extract the above info in other ways.
+
+```{r}
+# Returns number of rows
+nrow(books)
+
+# Returns number of columns
+ncol(books)
+
+# Returns both the number of columns and rows
+dim(books)
+
+# Returns the top part and bottom part of a dataset
+head(books)
+tail(books)
+```
+
+We can see that there are `2000` rows and `4` columns in our dataset
+
+We can see the column names from both the `head` and `glimpse` functions. However, we could also use `colnames`
+
+```{r}
+colnames(books)
+```
+
+In this dataset, here's what the columns represent:
+
+* `book` - Name of books
+* `review` - What review the book has. We can see some NA values here.
+* `state` - This may represetn where the book was published. These names are a bit inconsistent. 
+* `price` - The price of the books
+
+If we wanted to know the data type of these columns, we could look at the `glimpse` output. Alternatively, we could do something like this
+
+```{r}
+for (col in colnames(books)) {
+  type <- typeof(books[[col]])
+  print(paste(col, ":", type))
+}
+```
+
+We can see that 3 of the columns are of type `character`. One is of type `double`
+
+Let's get a better idea of the data using `summary` and `unique`. We'll also take a look at a couple of other functions.
+
+```{r}
+summary(books)
+```
+
+This is useful for getting some quick stats on the dataset. It's useful mainly for numerical data. As you can see it's given us the `mean`, `min`, along with a few other metrics.
+
+We can also get the `min` and `max` from the numerical column doing this.
+
+```{r}
+sapply(books[,4], range)
+```
+
+Let's look at the unique values for each column.
+
+```{r}
+for (col in colnames(books)) {
+  print(unique(books[[col]]))
+}
+```
+We're now more familiar with the data. Let's see if we can remove missing values.
+
+### Handling Missing Data
+
+There are really 4 things we can do with missing data:
+
+1. Ignore it
+1. Remove rows with missing data
+1. Remove columns with missing data
+1. Fill in the missing values with something
+
+We'll only look at 2 and 3 for now.
+
+```{r}
+# Check which columns have missing data
+for (col in colnames(books)) {
+  bool <- is.na(books[[col]])
+  if (TRUE %in% bool) {
+    print("Missing")
+  } else {
+    print("Fine")
+
+  }
+}
+
+
+```
+
+The above is a little inefficient. A better way of finding out which cols are missing values, we can do this
+
+```{r}
+colSums(is.na(books)) > 0
+```
+
+Or even simpler
+
+```{r}
+sapply(books, anyNA)
+```
+
+We can see that there are some missing values in the second column, `review`. Let's filter these out.
+
+```{r}
+# This filters the dataframe by all reviews that are not of NA value
+books_new <- books %>% filter(!is.na(review))
+nrow(books) - nrow(books_new)
+```
+
+You can see that we've removed `206` rows. We should always be aware of how much data we've removed, why that data had missing values in the first instance, and whether this is likely to impact on any potential analysis.
+
+### Dealting with Inconsistent Labels
+
+Let's take a closer look at our data using `head`
+
+```{r}
+head(books_new, 10)
+```
+
+It looks as those that `state` values may be a bit inconsistent. We can see `Texas` and `TX`
+
+```{r}
+unique(books_new$state)
+```
+
+Let's stick to using the full name, rather than the postal code. Once complete, our values should look like this:
+
+*. Texas
+*. New York
+*. Florida
+*. California
+
+In a real life analysis situation, we might load in a dataset of full names and postal codes, and map them that way. In this case, because there are so few states, we'll do it differently.
+
+Let's use the `case_when` and `mutate` functions as practice. There are more efficient ways, but we'll stick with this.
+
+```{r}
+books_new <- books_new %>%
+              mutate(states = case_when(
+                state == "TX" ~ "Texas",
+                state == "NY" ~ "New York", 
+                state == "FL" ~ "Florida", 
+                state == "CA" ~ "California",
+                TRUE ~ state
+              )) %>% select(-state)
+
+head(books_new)
+
+```
+
+```{r}
+unique(books_new$states)
+```
+
+### Transforming the Review Data
+
+Let's change the `review` column. We'll want to change these ratings to numerical data. We'll follow a similar process as the last exercise. We'll keep the original `review ` column.
+
+```{r}
+books_new <- books_new %>%
+              mutate(review_num = case_when(
+                review == "Poor" ~ 1,
+                review == "Fair" ~ 2,
+                review == "Good" ~ 3,
+                review == "Great" ~ 4,
+                review == "Excellent" ~ 5
+              )) 
+
+head(books_new)
+```
+
+Let's also create a column that lets us know whether a review is high or not. For the sake of this exercise, a review that is above `4` will be considered high.
+
+```{r}
+books_new <- books_new %>% 
+              mutate(is_high_review = if_else(review_num >= 4, TRUE, FALSE))
+
+head(books_new)
+```
+
+### Analyzing the Data
+
+Now that we've done some basic data cleaning, let's anaylze the data.
+
+Our goal is to assess which book is the most profitable. But how do we judge what's most profitable?
+
+For this dataset we could:
+
+*. Look at the frequency at which each book is purchased
+*. Look at how much money the book has generated overall
+
+I think both are important.
+
+```{r}
+# Assessing which books have sold the most
+count(books_new, book, sort = TRUE)
+```
+
+We can see that `Fundamentals of R For Beginners` has sold the most.
+
+```{r}
+books_new
+```
+
+Let's check the price. We can do it this way
+
+```{r}
+rowsum(books_new$price, books_new$book)
+```
+
+or maybe like this
+
+```{r}
+books_new %>% 
+  group_by(book) %>% 
+    summarise(price = sum(price))
+```
+
+Let's break this down. We can first create a gruoped variable, whereby we've essentially grouped by each category in the `book` column using `group_by`
+
+```{r}
+grouped <- group_by(books_new, book)
+```
+
+We then pass this to the `summarise` function where we sum up the existing price column. By piping the grouped variable to this, it sums up values by group.
+
+```{r}
+price_total <- summarise(grouped, price = sum(price))
+```
+
+
+```{r}
+# Sort the data using order
+price_total[order(price_total$price, decreasing = TRUE),]
+```
+
+We can see that `Secrets Of R For Advanced Students` has made the most money.
+
+We might say that this is the most profitable book. If we look back at frequency sold, most books seemed to have sold similar amount (350-370).
+
+However, with price, there is quite a spread. `Secrets Of R For Advanced Students` made over 3000 more than `Fundamentals of R For Beginners` despite only selling a handful of copies less.
+
+### Conclusion
+
+#### Introduction
+
+My motivation here was mainly to develop my basic R and Data Analysis skills, and set out a very basic outline of how to go about conducting analysis.
+
+The main aim of this report was to assess what the most profitable book was. There were two ways to assess this: **what sold the most**, and **what made the most money.**. I ultimately decided to look at both.
+
+#### Findings
+
+The data had some problems:
+
+1. Missing data - I identified there was missing data in the `review` column and took steps to remove rows where this was the case.
+1. Inconsistent data - I identified that the `state` column had inconsistencies. I took steps to amend this data.
+1. Review data - data in the `review` column was of character type. I took steps to create a new column which converted these ratings to numeric.
+
+For our main question, we were only really interested in:
+
+1. Seeing which books sold the most
+1. Seeing which books made the most money
+
+This involved using functions such as `groupby` and `count`. 
+
+Results revealed that:
+
+1. `Secrets Of R For Advanced Students` had made more money than any other book, by a reasonably large margin. 
+1. `Fundamentals of R For Beginners` had sold more books than any other book, by a reasonably small margin.
+
+### Conclusion
+
+The answer to our question was that both `Fundamentals of R For Beginners` and `Secrets Of R For Advanced Students` were both profitable. However, given that there were only small differences in the amount of books sold by category, and quite a large difference between the book which sold the most, compared to the rest, I believe `Secrets Of R For Advanced Students` is the most profitable book.
+
+There are of course many factors which limit this analysis. For one, we don't know the profit margins. Although we can say one book made more than another book, we can't say whether it generated more profit.
+
+This type of analysis can be taken many ways. A bookstore may use this information to adjust prices, promote less popular books, double down on promoting the most popular books, or displaying the most popular book in the window display.
+
+**THANKS FOR READING!!!!**
+
+
+
+
+
+
+
+
+
+
